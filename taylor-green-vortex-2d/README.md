@@ -1,13 +1,19 @@
 # Two-dimensional Taylor–Green vortex
 
-`taylor_green_2d.jl` simulates the decaying two-dimensional Taylor–Green vortex with
-[Oceananigans.jl](https://github.com/CliMA/Oceananigans.jl), compares it with the exact solution, and animates its
-vorticity, streamlines and fluid particles for the Wikipedia article
-[Taylor–Green vortex](https://en.wikipedia.org/wiki/Taylor%E2%80%93Green_vortex).
+Simulations of the decaying two-dimensional Taylor–Green vortex with
+[Oceananigans.jl](https://github.com/CliMA/Oceananigans.jl), for the Wikipedia article
+[Taylor–Green vortex](https://en.wikipedia.org/wiki/Taylor%E2%80%93Green_vortex):
+
+- `taylor_green_2d.jl` simulates the vortex at Re = 100 and compares it with the exact solution. It makes two
+  animations: one of the vorticity, streamlines and fluid particles, and one of all five scalar fields, $u$, $v$,
+  $p$, $\psi$ and $\omega$.
+- `taylor_green_2d_reynolds.jl` animates the vorticity, streamlines and fluid particles at Re = 10, 100, 1000 and
+  10,000, side by side.
+- `taylor_green.jl` holds the set-up shared by both scripts.
 
 ## Problem
 
-The simulation solves the incompressible Navier–Stokes equations with constant viscosity $\nu$,
+The simulations solve the incompressible Navier–Stokes equations with constant viscosity $\nu$,
 
 ```math
 \frac{\partial \mathbf{u}}{\partial t} + (\mathbf{u} \cdot \nabla) \mathbf{u} = -\nabla p + \nu \nabla^2 \mathbf{u}, \qquad \nabla \cdot \mathbf{u} = 0,
@@ -31,9 +37,15 @@ p &= \frac{U_0^2}{4} \left[ \cos(2kx) + \cos(2ky) \right] F(t)^2, & F(t) &= e^{-
 \end{aligned}
 ```
 
-and its vorticity is $\omega = \partial_x v - \partial_y u = 2 k U_0 \sin(kx) \sin(ky) \, F(t)$.
+and its streamfunction and vorticity are
 
-## Set-up
+```math
+\psi = \frac{U_0}{k} \sin(kx) \sin(ky) \, F(t), \qquad \omega = \frac{\partial v}{\partial x} - \frac{\partial u}{\partial y} = 2 k^2 \psi,
+```
+
+with $u = \partial \psi / \partial y$ and $v = -\partial \psi / \partial x$.
+
+## Set-up at Re = 100
 
 - $U_0 = k = 1$ and $\nu = 0.01$, so the Reynolds number is $\mathrm{Re} = U_0 / (k \nu) = 100$.
 - The run ends at $t = 100 / (k U_0)$, when the kinetic energy has decayed to $e^{-4} \approx 2\%$ of its initial value.
@@ -41,7 +53,9 @@ and its vorticity is $\omega = \partial_x v - \partial_y u = 2 k U_0 \sin(kx) \s
   centered advection, third-order Runge–Kutta time stepping and an FFT-based pressure solver.
 - 256 × 256 grid cells, so $k \Delta x = 2\pi / 256$.
 - Adaptive time step: advective CFL number at most 0.5, and $\nu \Delta t / \Delta x^2$ at most 0.2.
-- 576 Lagrangian particles, starting on a uniform 24 × 24 lattice, are carried by the flow for the animation.
+- The streamfunction is computed from the velocity by summing the volume fluxes across cell faces, which is exact on
+  the grid. Its contours are the streamlines.
+- 576 Lagrangian particles, starting on a uniform 24 × 24 lattice, are carried by the flow for the animations.
 
 ## Accuracy
 
@@ -50,3 +64,28 @@ $1.1 \times 10^{-4}$ in pressure. Throughout the run the kinetic energy stays wi
 the exact $\tfrac{1}{4} U_0^2 e^{-4 \nu k^2 t}$. These are second-order truncation errors, mostly from the discrete
 Laplacian: it makes the vortices decay at the slightly slower rate $2 \nu k^2 \left[ 1 - (k \Delta x)^2 / 12 \right]$,
 which leaves their amplitude too large by $(k \Delta x)^2 / 6 \approx 10^{-4}$ at the end.
+
+## Reynolds-number comparison
+
+The four simulations differ from the one above in three ways.
+
+- $\nu = 0.1$, $0.01$, $10^{-3}$ and $10^{-4}$ (Re = 10, 100, 1000 and 10,000), on 256², 256², 512² and 1024²
+  grids. The grid is finer at high Re to resolve the thinner vorticity filaments.
+- The runs end at $t = 200 / (k U_0)$.
+- Each starts from the vortex plus the same small random perturbation, like the disturbances any real flow has. Its
+  stream function is
+
+  ```math
+  \psi' = \sum_{m, n} a_{mn} \cos\left( k (m x + n y) + \phi_{mn} \right),
+  ```
+
+  summed over the 40 wavevectors $k(m, n)$ with $|m|, |n| \le 4$, one from each $\pm$ pair. The amplitudes $a_{mn}$
+  are drawn from a normal distribution and the phases $\phi_{mn}$ from a uniform one. They are scaled so that the
+  perturbation's root-mean-square speed is $10^{-3}$ of the vortex's, $U_0 / \sqrt{2}$.
+
+At Re = 10 and 100, the vortices decay before the perturbation can grow large. At Re = 1000 and 10,000, the array
+of vortices is unstable ([Zhao, Protas & Shvydkoy 2024](https://arxiv.org/abs/2404.17957)). The perturbation grows
+exponentially, by about $e^{0.13 k U_0 t}$ and $e^{0.14 k U_0 t}$, until the vortices break up into two-dimensional
+turbulence between $t = 70 / (k U_0)$ and $90 / (k U_0)$. By $t = 200 / (k U_0)$ the turbulence has merged into a
+shear flow that fills the domain. Without the perturbation, round-off error would trigger the same instability,
+only later.
