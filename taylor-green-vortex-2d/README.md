@@ -49,8 +49,8 @@ with $u = \partial \psi / \partial y$ and $v = -\partial \psi / \partial x$.
 
 - $U_0 = k = 1$ and $\nu = 0.01$, so the Reynolds number is $\mathrm{Re} = U_0 / (k \nu) = 100$.
 - The run ends at $t = 100 / (k U_0)$, when the kinetic energy has decayed to $e^{-4} \approx 2\%$ of its initial value.
-- Oceananigans 0.114.1 `NonhydrostaticModel` with its defaults: finite volumes on a staggered grid, second-order
-  centered advection, third-order Runge–Kutta time stepping and an FFT-based pressure solver.
+- Oceananigans 0.114.1 `NonhydrostaticModel`: finite volumes on a staggered grid, fifth-order WENO advection,
+  third-order Runge–Kutta time stepping and an FFT-based pressure solver.
 - 256 × 256 grid cells, so $k \Delta x = 2\pi / 256$.
 - Adaptive time step: advective CFL number at most 0.5, and $\nu \Delta t / \Delta x^2$ at most 0.2.
 - The streamfunction is computed from the velocity by summing the volume fluxes across cell faces, which is exact on
@@ -60,10 +60,12 @@ with $u = \partial \psi / \partial y$ and $v = -\partial \psi / \partial x$.
 ## Accuracy
 
 At $t = 100 / (k U_0)$ the maximum error relative to the current amplitude is $7.5 \times 10^{-5}$ in vorticity and
-$1.1 \times 10^{-4}$ in pressure. Throughout the run the kinetic energy stays within a relative $2 \times 10^{-4}$ of
-the exact $\tfrac{1}{4} U_0^2 e^{-4 \nu k^2 t}$. These are second-order truncation errors, mostly from the discrete
-Laplacian: it makes the vortices decay at the slightly slower rate $2 \nu k^2 \left[ 1 - (k \Delta x)^2 / 12 \right]$,
-which leaves their amplitude too large by $(k \Delta x)^2 / 6 \approx 10^{-4}$ at the end.
+$3.1 \times 10^{-4}$ in pressure. Throughout the run the kinetic energy stays within a relative $2 \times 10^{-4}$ of
+the exact $\tfrac{1}{4} U_0^2 e^{-4 \nu k^2 t}$. The vorticity and energy errors are second-order truncation errors of
+the discrete Laplacian: it makes the vortices decay at the slightly slower rate
+$2 \nu k^2 \left[ 1 - (k \Delta x)^2 / 12 \right]$, which leaves their amplitude too large by
+$(k \Delta x)^2 / 6 \approx 10^{-4}$ at the end. The pressure balances the advection term, so its error also includes
+that of the WENO reconstruction.
 
 ## Reynolds-number comparison
 
