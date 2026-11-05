@@ -18,12 +18,7 @@ run_output(Re) = output_file("taylor_green_2d_Re$Re.jld2")
 velocity_series(Re, component) = FieldTimeSeries(run_output(Re), component; backend = OnDisk())
 
 for (; Re, N) in runs
-    simulation = taylor_green_simulation(;
-            Re,
-            N,
-            stop_time = 200,
-            perturbation = 1e-3
-    )
+    simulation = taylor_green_simulation(; Re, N, stop_time = 200, perturbation = 1e-3)
 
     model = simulation.model
     u, v, _ = model.velocities
