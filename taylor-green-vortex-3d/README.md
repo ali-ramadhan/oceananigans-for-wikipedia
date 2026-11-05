@@ -65,8 +65,8 @@ The three-dimensional run is compared with the benchmark's pseudo-spectral refer
 - Up to $t = 20 L/V_0$, where the reference ends, the dissipation rate differs from the reference by at most 1.8% of
   the reference's peak.
 - The mean-square vorticity grows 26.6-fold by the peak, against 27.4-fold in the reference.
-- The viscous dissipation $\nu \langle |\boldsymbol{\omega}|^2 \rangle$ peaks at $0.01248\, V_0^3/L$, so WENO's numerical
-  dissipation is about 2% of the total near the peak.
+- The viscous dissipation $\nu \langle |\boldsymbol{\omega}|^2 \rangle$ peaks at $0.01248\, V_0^3/L$, so WENO's
+  numerical dissipation is about 2% of the total near the peak.
 
 In two dimensions, the mean-square vorticity at $t = 60 L/V_0$ is 0.860710 of its initial value, against the exact
 $e^{-4 \nu t / L^2} = 0.860708$, and its relative error stays below $2 \times 10^{-6}$ throughout.
