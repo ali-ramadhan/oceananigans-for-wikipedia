@@ -1,33 +1,35 @@
-# The two-dimensional Taylor–Green vortex at Re = 100, an exact solution of the Navier–Stokes equations
-# (see taylor_green.jl). The script simulates the flow with Oceananigans, checks the numerical solution against the
-# exact one, and makes two animations: the vorticity with streamlines and fluid particles, and all five scalar fields
-# (the velocity components u and v, the pressure p, the streamfunction ψ and the vorticity ω).
+# The two-dimensional Taylor–Green vortex at Re = 100, an exact solution of the Navier–Stokes equations. This script
+# simulates the flow, checks it against the exact solution, and makes two animations: the vorticity with streamlines and
+# fluid particles, and all five scalar fields.
 #
 #     julia --project taylor_green_2d.jl
 
 include("taylor_green.jl")
-include("video_encoding.jl")
 
 Re = 100
 U₀ = 1
 k = 1
-output_directory = joinpath(@__DIR__, "output")
-mkpath(output_directory)
-filename = joinpath(output_directory, "taylor_green_2d.jld2")
+filename = output_file("taylor_green_2d.jld2")
 
 simulation = taylor_green_simulation(; Re, U₀, k, N = 256, stop_time = 100)
+
 model = simulation.model
-u, v, w = model.velocities
+u, v, _ = model.velocities
 p = model.pressures.pNHS
-simulation.output_writers[:fields] = JLD2Writer(model, (; u, v, p, model.particles); filename,
-                                                 schedule = TimeInterval(0.25), overwrite_files = true)
+
+simulation.output_writers[:fields] = JLD2Writer(model, (; u, v, p, model.particles);
+        filename,
+        schedule = TimeInterval(0.25),
+        overwrite_files = true
+)
+
 run!(simulation)
 
 ut = FieldTimeSeries(filename, "u")
 vt = FieldTimeSeries(filename, "v")
 pt = FieldTimeSeries(filename, "p")
 times = ut.times
-particles = particle_positions(filename)
+trajectories = particle_trajectories(filename)
 
 #####
 ##### Check the simulation against the exact solution
@@ -35,89 +37,83 @@ particles = particle_positions(filename)
 
 ν = U₀ / (k * Re)
 F(t) = exp(-2ν * k^2 * t)
-n = length(times)
-t = times[n]
+t = times[end]
 
-ω = vorticity(ut[n], vt[n])
-xω, yω, _ = nodes(ω)
-exact_vorticity = [2k * U₀ * sin(k * x) * sin(k * y) * F(t) for x in xω, y in yω]
-vorticity_error = maximum(abs, interior(ω, :, :, 1) .- exact_vorticity) / (2k * U₀ * F(t))
+exact_vorticity(x, y) = 2k * U₀ * sin(k * x) * sin(k * y) * F(t)
+exact_pressure(x, y) = U₀^2 / 4 * (cos(2k * x) + cos(2k * y)) * F(t)^2
 
-xp, yp, _ = nodes(pt[n])
-pressure = interior(pt[n], :, :, 1)
-exact_pressure = [U₀^2 / 4 * (cos(2k * x) + cos(2k * y)) * F(t)^2 for x in xp, y in yp]
-pressure_error = maximum(abs, pressure .- sum(pressure) / length(pressure) .- exact_pressure) / (U₀^2 / 2 * F(t)^2)
+# The exact fields have zero mean, and the simulated pressure is only defined up to a constant.
+function maximum_error(field, exact)
+    xs, ys, _ = nodes(field)
+    simulated = interior(field, :, :, 1)
+    return maximum(abs, simulated .- mean(simulated) .- [exact(x, y) for x in xs, y in ys])
+end
 
-kinetic_energy = [(sum(abs2, interior(ut[i])) + sum(abs2, interior(vt[i]))) / 2length(interior(ut[i]))
-                  for i in eachindex(times)]
-kinetic_energy_error = maximum(abs, kinetic_energy ./ (U₀^2 / 4 .* F.(times) .^ 2) .- 1)
+vorticity_error = maximum_error(vorticity(ut[end], vt[end]), exact_vorticity) / (2k * U₀ * F(t))
+pressure_error = maximum_error(pt[end], exact_pressure) / (U₀^2 / 2 * F(t)^2)
+
+mean_square(field) = mean(abs2, interior(field))
+kinetic_energy = [(mean_square(ut[n]) + mean_square(vt[n])) / 2 for n in eachindex(times)]
+exact_kinetic_energy = @. U₀^2 / 4 * F(times)^2
+kinetic_energy_error = maximum(abs, kinetic_energy ./ exact_kinetic_energy .- 1)
 
 @info @sprintf("Relative errors at t = %d: vorticity %.1e, pressure %.1e; maximum kinetic energy error %.1e",
-               t, vorticity_error, pressure_error, kinetic_energy_error)
+        t,
+        vorticity_error,
+        pressure_error,
+        kinetic_energy_error
+)
 
 #####
 ##### Animation of the vorticity, streamlines and fluid particles
 #####
 
-set_theme!(Theme(fontsize = 22))
 animation_title(frame) = @lift @sprintf("2D Taylor–Green vortex, Re = %d:   t = %5.1f", Re, times[$frame])
 
 fig = Figure(size = (1080, 1080))
 frame = Observable(1)
-Label(fig[0, 1:2], animation_title(frame), fontsize = 28, tellwidth = false)
+Label(fig[0, 1:2], animation_title(frame))
 
-ticks = (0:π/2:2π, ["0", "π/2", "π", "3π/2", "2π"])
-ax = Axis(fig[1, 1]; title = "Vorticity, streamlines and fluid particles", xlabel = "x", ylabel = "y",
-          limits = ((0, 2π / k), (0, 2π / k)), xticks = ticks, yticks = ticks)
-vorticity_heatmap = vorticity_panel!(ax, ut, vt, particles, frame; U₀, k)
+ax = domain_axis(fig[1, 1], ut.grid;
+        size = 840,
+        title = "Vorticity, streamlines and fluid particles"
+)
+
+vorticity_heatmap = vorticity_panel!(ax, ut, vt, trajectories, frame; U₀, k)
 Colorbar(fig[1, 2], vorticity_heatmap; label = "ω / kU₀")
-colsize!(fig.layout, 1, Fixed(840))
-rowsize!(fig.layout, 1, Fixed(840))
 
-master = record_lossless(fig, joinpath(output_directory, "taylor_green_2d_master.mkv"), eachindex(times)) do i
-    frame[] = i
-end
-encode_webm(master, joinpath(output_directory, "taylor_green_2d.webm"))
-
-frame[] = findfirst(≥(20), times)
-save(joinpath(output_directory, "taylor_green_2d.png"), fig; px_per_unit = 2)
+save_animation(fig, frame, times, "taylor_green_2d"; still_time = 20)
 
 #####
 ##### Animation of all five fields
 #####
 
-# Each field has a fixed colour range, its initial maximum, so the panels fade as the flow decays. The pressure fades
-# fastest, as F(t)².
-panels = [("Velocity u", i -> ut[i], U₀, "u / U₀"),
-          ("Velocity v", i -> vt[i], U₀, "v / U₀"),
-          ("Pressure p", i -> pt[i], U₀^2 / 2, "p / ρU₀²"),
-          ("Streamfunction ψ", i -> streamfunction(ut[i], vt[i]), U₀ / k, "kψ / U₀"),
-          ("Vorticity ω", i -> vorticity(ut[i], vt[i]), 2k * U₀, "ω / kU₀")]
-
 fig = Figure()
 frame = Observable(1)
-Label(fig[0, 1], animation_title(frame), fontsize = 28, tellwidth = false)
+Label(fig[0, 1], animation_title(frame))
 top = fig[1, 1] = GridLayout()
-bottom = fig[2, 1] = GridLayout(tellwidth = false)  # centred under the top row
+bottom = fig[2, 1] = GridLayout(tellwidth = false)  # centered under the top row
 
-ticks = (0:π:2π, ["0", "π", "2π"])
-for (j, (name, field, extent, label)) in enumerate(panels)
-    position = j ≤ 3 ? top[1, j] : bottom[1, j - 3]
-    panel = Axis(position[1, 1]; title = name, xlabel = "x", ylabel = "y", width = 440, height = 440,
-                 limits = ((0, 2π / k), (0, 2π / k)), xticks = ticks, yticks = ticks)
-    field_heatmap = heatmap!(panel, @lift(cell_centered(field($frame))); colormap = :balance,
-                             colorrange = (-extent, extent))
+function field_panel!(position, title, field, initial_maximum, label)
+    ax = domain_axis(position[1, 1], ut.grid;
+            title,
+            size = 440,
+            ticks = (0:π:2π, ["0", "π", "2π"])
+    )
+
+    field_heatmap = heatmap!(ax, @lift(cell_centered(field($frame)));
+            colormap = :balance,
+            colorrange = (-initial_maximum, initial_maximum)
+    )
+
     Colorbar(position[1, 2], field_heatmap; label)
 end
+
+field_panel!(top[1, 1], "Velocity u", n -> ut[n], U₀, "u / U₀")
+field_panel!(top[1, 2], "Velocity v", n -> vt[n], U₀, "v / U₀")
+field_panel!(top[1, 3], "Pressure p", n -> pt[n], U₀^2 / 2, "p / ρU₀²")
+field_panel!(bottom[1, 1], "Streamfunction ψ", n -> streamfunction(ut[n], vt[n]), U₀ / k, "kψ / U₀")
+field_panel!(bottom[1, 2], "Vorticity ω", n -> vorticity(ut[n], vt[n]), 2k * U₀, "ω / kU₀")
+
 resize_to_layout!(fig)
-# The video encoder needs even dimensions.
-figure_width, figure_height = size(fig.scene)
-resize!(fig, figure_width + isodd(figure_width), figure_height + isodd(figure_height))
-
-master = record_lossless(fig, joinpath(output_directory, "taylor_green_2d_fields_master.mkv"), eachindex(times)) do i
-    frame[] = i
-end
-encode_webm(master, joinpath(output_directory, "taylor_green_2d_fields.webm"))
-
-frame[] = findfirst(≥(20), times)
-save(joinpath(output_directory, "taylor_green_2d_fields.png"), fig; px_per_unit = 2)
+save_animation(fig, frame, times, "taylor_green_2d_fields"; still_time = 20)

@@ -9,14 +9,16 @@ Simulations of the decaying two-dimensional Taylor–Green vortex with
   $p$, $\psi$ and $\omega$.
 - `taylor_green_2d_reynolds.jl` animates the vorticity, streamlines and fluid particles at Re = 10, 100, 1000 and
   10,000, side by side.
-- `taylor_green.jl` holds the set-up shared by both scripts.
+- `taylor_green.jl` holds the code shared by both scripts.
+- `video_encoding.jl` records the animations and encodes them for Wikimedia Commons.
 
 ## Problem
 
 The simulations solve the incompressible Navier–Stokes equations with constant viscosity $\nu$,
 
 ```math
-\frac{\partial \mathbf{u}}{\partial t} + (\mathbf{u} \cdot \nabla) \mathbf{u} = -\nabla p + \nu \nabla^2 \mathbf{u}, \qquad \nabla \cdot \mathbf{u} = 0,
+\frac{\partial \mathbf{u}}{\partial t} + (\mathbf{u} \cdot \nabla) \mathbf{u} = -\nabla p + \nu \nabla^2 \mathbf{u},
+\qquad \nabla \cdot \mathbf{u} = 0,
 ```
 
 for the velocity $\mathbf{u} = (u, v)$ and the pressure $p$ (divided by the density), in a doubly periodic square of
@@ -40,7 +42,8 @@ p &= \frac{U_0^2}{4} \left[ \cos(2kx) + \cos(2ky) \right] F(t)^2, & F(t) &= e^{-
 and its streamfunction and vorticity are
 
 ```math
-\psi = \frac{U_0}{k} \sin(kx) \sin(ky) \, F(t), \qquad \omega = \frac{\partial v}{\partial x} - \frac{\partial u}{\partial y} = 2 k^2 \psi,
+\psi = \frac{U_0}{k} \sin(kx) \sin(ky) \, F(t),
+\qquad \omega = \frac{\partial v}{\partial x} - \frac{\partial u}{\partial y} = 2 k^2 \psi,
 ```
 
 with $u = \partial \psi / \partial y$ and $v = -\partial \psi / \partial x$.
@@ -69,25 +72,19 @@ that of the WENO reconstruction.
 
 ## Reynolds-number comparison
 
-The four simulations differ from the one above in three ways.
+The four simulations differ from the one above in three ways:
 
 - $\nu = 0.1$, $0.01$, $10^{-3}$ and $10^{-4}$ (Re = 10, 100, 1000 and 10,000), on 256², 256², 512² and 1024²
   grids. The grid is finer at high Re to resolve the thinner vorticity filaments.
 - The runs end at $t = 200 / (k U_0)$.
-- Each starts from the vortex plus the same small random perturbation, like the disturbances any real flow has. Its
-  stream function is
+- Each starts from the vortex plus the same small random perturbation, like the disturbances any real flow has.
 
-  ```math
-  \psi' = \sum_{m, n} a_{mn} \cos\left( k (m x + n y) + \phi_{mn} \right),
-  ```
+The perturbation's streamfunction is
 
-  summed over the 40 wavevectors $k(m, n)$ with $|m|, |n| \le 4$, one from each $\pm$ pair. The amplitudes $a_{mn}$
-  are drawn from a normal distribution and the phases $\phi_{mn}$ from a uniform one. They are scaled so that the
-  perturbation's root-mean-square speed is $10^{-3}$ of the vortex's, $U_0 / \sqrt{2}$.
+```math
+\psi' = \sum_{m, n} a_{mn} \cos\left( k (m x + n y) + \phi_{mn} \right),
+```
 
-At Re = 10 and 100, the vortices decay before the perturbation can grow large. At Re = 1000 and 10,000, the array
-of vortices is unstable ([Zhao, Protas & Shvydkoy 2024](https://arxiv.org/abs/2404.17957)). The perturbation grows
-exponentially, by about $e^{0.13 k U_0 t}$ and $e^{0.14 k U_0 t}$, until the vortices break up into two-dimensional
-turbulence between $t = 70 / (k U_0)$ and $90 / (k U_0)$. By $t = 200 / (k U_0)$ the turbulence has merged into a
-shear flow that fills the domain. Without the perturbation, round-off error would trigger the same instability,
-only later.
+summed over the 40 wavevectors $k(m, n)$ with $|m|, |n| \le 4$, one from each $\pm$ pair. The amplitudes $a_{mn}$ are
+drawn from a normal distribution and the phases $\phi_{mn}$ from a uniform one. They are scaled so that the
+perturbation's root-mean-square speed is $10^{-3}$ of the vortex's, $U_0 / \sqrt{2}$.
